@@ -5,7 +5,6 @@ set(CMAKE_CXX_STANDARD 11)
 
 set(SOURCE_FILES
         compiler.cpp
-        main.cpp
         scope.cpp
         virtual_environment.cpp
 )
@@ -19,4 +18,5 @@ set(HEADER_FILES
         virtual_environment.h
 )
 
-add_executable(ModularInterpreter ${SOURCE_FILES} ${HEADER_FILES})
+add_executable(ModularInterpreter main.cpp ${SOURCE_FILES} ${HEADER_FILES})
+add_executable(Test main_test.cpp ${SOURCE_FILES} ${HEADER_FILES})
