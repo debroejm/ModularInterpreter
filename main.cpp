@@ -28,7 +28,7 @@ int main() {
     };
 
     virtual_environment ve(BIT_64, 8, 8, MEM_KB, 1, MEM_KB);
-    ve.setProgram(ve_program(sizeof(fibonacci) / sizeof(vbyte), fibonacci, 1, MEM_KB));
+    ve.setProgram(ve_program(sizeof(fibonacci) / sizeof(vbyte), fibonacci));
     retcode result = ve.run();
 
     std::cout << "RetCode=" << result << std::endl;

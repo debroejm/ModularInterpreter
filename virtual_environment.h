@@ -254,20 +254,20 @@ struct ve_register {
 struct virtual_environment;
 
 struct ve_program {
-    vbyte* _data = nullptr;
+    vbyte* _exec = nullptr;
     size_t _size = 0;
     size_t _counter = 0;
 
     ve_program() {
-        _data = nullptr;
+        _exec = nullptr;
         _size = 0;
         _counter = 0;
     }
 
-    ve_program(size_t size, vbyte data[], size_t stack_size, memory_prefix stack_prefix) {
+    ve_program(size_t size, vbyte exec[]) {
         _size = size;
-        _data = new vbyte[_size];
-        for(size_t i = 0; i < _size; i++) _data[i] = data[i];
+        _exec = new vbyte[_size];
+        for(size_t i = 0; i < _size; i++) _exec[i] = exec[i];
         _counter = 0;
     }
 
@@ -276,19 +276,23 @@ struct ve_program {
     }
 
     ~ve_program() {
-        if(_data != nullptr) delete [] _data;
+        if(_exec != nullptr) delete [] _exec;
     }
 
     ve_program &operator=(const ve_program &rhs) {
         _size = rhs._size;
         _counter = rhs._counter;
-        if(_data != nullptr) delete [] _data;
-        _data = new vbyte[_size];
-        for(size_t i = 0; i < _size; i++) _data[i] = rhs._data[i];
+        if(_exec != nullptr) delete [] _exec;
+        _exec = new vbyte[_size];
+        for(size_t i = 0; i < _size; i++) _exec[i] = rhs._exec[i];
         return *this;
     }
 
     retcode run(virtual_environment &ve);
+
+protected:
+    friend class virtual_environment;
+    retcode run(virtual_environment &ve, vbyte* stack_mem, size_t stack_size);
 };
 
 class virtual_environment {
@@ -296,8 +300,9 @@ protected:
 
     ve_memory _memory;
 
-    ve_register _stack_ptr;
-    ve_memory _stack;
+    size_t _stack_size_in_bytes;
+
+    //ve_register _stack_ptr;
 
     ve_register* _registries = nullptr;
     vbyte _register_count;
@@ -310,7 +315,8 @@ public:
 
     virtual_environment(bit_width max_byte_width, vbyte registry_count, size_t mem_size, memory_prefix mem_prefix, size_t stack_size, memory_prefix stack_prefix)
             : _memory(mem_size, mem_prefix), _register_count(registry_count), _max_byte_width(max_byte_width),
-              _stack_ptr(_max_byte_width), _stack(stack_size, stack_prefix) {
+              //_stack_ptr(_max_byte_width), _stack(stack_size, stack_prefix) {
+              _stack_size_in_bytes(stack_size*stack_prefix) {
         _registries = new ve_register[_register_count];
         for(vbyte i = 0; i < _register_count; i++) _registries[i] = ve_register(_max_byte_width);
     }
@@ -331,17 +337,19 @@ public:
         for(vbyte i = 0; i < _register_count; i++) _registries[i] = rhs._registries[i];
         _max_byte_width = rhs._max_byte_width;
         _program = rhs._program;
-        _stack_ptr = rhs._stack_ptr;
-        _stack = rhs._stack;
+        _stack_size_in_bytes = rhs._stack_size_in_bytes;
+        //_stack_ptr = rhs._stack_ptr;
         return *this;
     }
 
     ve_register &getRegister(vbyte id) {
-        if(id == (vbyte)-1) return _stack_ptr;
-        else return _registries[id % _register_count];
+        //if(id == (vbyte)-1) return _stack_ptr; else
+        return _registries[id % _register_count];
     }
 
     ve_memory &getMemory() { return _memory; }
+
+    size_t getStackSizeInBytes() { return _stack_size_in_bytes; }
 
     void setProgram(const ve_program &program) {
         _program = program;
