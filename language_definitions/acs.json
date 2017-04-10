@@ -1,0 +1,32 @@
+{
+  "whitespace_sensitivity" : "none",
+  "coercion" : "all",
+  "statement" : {
+    "symbol_start" : null,
+    "symbol_end" : ";"
+  },
+  "primitives" : [
+    {
+      "keyword" : "int",
+      "type" : "int32"
+    },
+    {
+      "keyword" : "bool",
+      "type" : "int32"
+    }
+  ],
+  "segments" : [
+    {
+      "type" : "block",
+      "symbol_start" : "{",
+      "symbol_end" : "}"
+    },
+    {
+      "type" : "while",
+      "keyword" : "while",
+      "symbol_start" : "(",
+      "symbol_end" : ")",
+      "body" : "either"
+    }
+  ]
+}

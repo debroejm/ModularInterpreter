@@ -1,0 +1,17 @@
+{
+  "whitespace_sensitivity" : "none",
+  "segments" : [
+    {
+      "type" : "block",
+      "symbol_start" : "do",
+      "symbol_end" : "end"
+    },
+    {
+      "type" : "while",
+      "keyword" : "while",
+      "symbol_start" : null,
+      "symbol_end" : null,
+      "body" : "block"
+    }
+  ]
+}
