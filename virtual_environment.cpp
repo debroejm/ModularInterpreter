@@ -2,22 +2,14 @@
 
 #include "ve_commands.h"
 
-#include <bitset>
-#include <iostream>
-
-//#define DEBUG_MODE
-
-#if defined(DEBUG_MODE)
-#define DEBUG_PRINT_CMD(CNT,BIN) std::cout << CNT << ":\t" << std::bitset<8>(BIN) << std::endl
-#define DEBUG_PRINT(STR) std::cout << STR << std::endl;
-#else
-#define DEBUG_PRINT_CMD(CNT,BIN)
-#define DEBUG_PRINT(STR)
-#endif
-
 retcode virtual_environment::run() {
     retcode rc = _program.run(*this);
     return rc;
+}
+
+ve_register &ve_program::getRegister(virtual_environment &ve, vbyte id) {
+    if(id == (vbyte)-1) return _stack;
+    else return ve.getRegister(id);
 }
 
 retcode ve_program::run(virtual_environment &ve) {
@@ -30,7 +22,13 @@ retcode ve_program::run(virtual_environment &ve) {
 
 retcode ve_program::run(virtual_environment &ve, vbyte* stack_mem, size_t stack_size) {
     if(_exec == nullptr) return RET_UNEXPECTED_END;
+
     _counter = 0;
+    _stack = ve_register(ve.getMaxByteWidth());
+
+    DEBUG_PRINT("Running");
+    DEBUG_PRINT("Program Size: " << _size);
+
     while(_counter < _size) {
         vbyte cmd = _exec[_counter];
         DEBUG_PRINT_CMD(_counter,(int)cmd);
@@ -57,13 +55,22 @@ retcode ve_program::run(virtual_environment &ve, vbyte* stack_mem, size_t stack_
                         default: width = BIT_8; break;
                     }
                     if (_size - _counter < 2) return RET_UNEXPECTED_END;
-                    ve_register &reg_data = ve.getRegister(_exec[++_counter]);
-                    ve_register &reg_pos = ve.getRegister(_exec[++_counter]);
+                    ve_register &reg_data = getRegister(ve, _exec[++_counter]);
+                    ve_register &reg_pos = getRegister(ve, _exec[++_counter]);
                     size_t mem_pos = reg_pos._data.getu();
                     vbyte mem_data[width];
-                    ve_memory &mem = ve.getMemory();
+                    vbyte* mem;
+                    size_t max_size;
+                    if(&reg_pos == &_stack) {
+                        mem = stack_mem;
+                        max_size = stack_size;
+                    }
+                    else {
+                        mem = ve.getMemory()._data;
+                        max_size = ve.getMemory()._size_in_bytes;
+                    }
                     for(vbyte i = 0; i < width; i++) {
-                        if(mem_pos+i < mem._size_in_bytes) mem_data[i] = mem._data[mem_pos+i];
+                        if(mem_pos+i < max_size) mem_data[i] = mem[mem_pos+i];
                         else mem_data[i] = 0;
                     }
                     reg_data._data = vvalue(mem_data, width).get(); // Don't want to change bitwidth of output register
@@ -78,28 +85,37 @@ retcode ve_program::run(virtual_environment &ve, vbyte* stack_mem, size_t stack_
                         default: width = BIT_8; break;
                     }
                     if (_size - _counter < 2) return RET_UNEXPECTED_END;
-                    ve_register &reg_data = ve.getRegister(_exec[++_counter]);
-                    ve_register &reg_pos = ve.getRegister(_exec[++_counter]);
+                    ve_register &reg_data = getRegister(ve, _exec[++_counter]);
+                    ve_register &reg_pos = getRegister(ve, _exec[++_counter]);
                     size_t mem_pos = reg_pos._data.getu();
-                    ve_memory &mem = ve.getMemory();
+                    vbyte* mem;
+                    size_t max_size;
+                    if(&reg_pos == &_stack) {
+                        mem = stack_mem;
+                        max_size = stack_size;
+                    }
+                    else {
+                        mem = ve.getMemory()._data;
+                        max_size = ve.getMemory()._size_in_bytes;
+                    }
                     bit_width least_width = width;
                     if(reg_data._width < least_width) least_width = reg_data._width;
+                    vbyte* tdata;
+                    switch(reg_data._width) {
+                        default:
+                        case BIT_8:  tdata = &reg_data._data._8 .bytes[0]; break;
+                        case BIT_16: tdata = &reg_data._data._16.bytes[0]; break;
+                        case BIT_32: tdata = &reg_data._data._32.bytes[0]; break;
+                        case BIT_64: tdata = &reg_data._data._64.bytes[0]; break;
+                    }
                     for(size_t i = 0; i < least_width; i++) {
-                        if(mem_pos+i < mem._size_in_bytes) {
-                            vbyte* tdata;
-                            switch(reg_data._width) {
-                                default:
-                                case BIT_8:  tdata = &reg_data._data._8.bytes[0];  break;
-                                case BIT_16: tdata = &reg_data._data._16.bytes[0]; break;
-                                case BIT_32: tdata = &reg_data._data._32.bytes[0]; break;
-                                case BIT_64: tdata = &reg_data._data._64.bytes[0]; break;
-                            }
+                        if(mem_pos+i < max_size) {
                             switch(least_width) {
                                 default:
-                                case BIT_8:  mem._data[mem_pos+i] = tdata[i];   break;
-                                case BIT_16: mem._data[mem_pos+i] = tdata[1-i]; break;
-                                case BIT_32: mem._data[mem_pos+i] = tdata[3-i]; break;
-                                case BIT_64: mem._data[mem_pos+i] = tdata[7-i]; break;
+                                case BIT_8:  mem[mem_pos+i] = tdata[i];   break;
+                                case BIT_16: mem[mem_pos+i] = tdata[1-i]; break;
+                                case BIT_32: mem[mem_pos+i] = tdata[3-i]; break;
+                                case BIT_64: mem[mem_pos+i] = tdata[7-i]; break;
                             }
                         }
                     }
@@ -116,15 +132,15 @@ retcode ve_program::run(virtual_environment &ve, vbyte* stack_mem, size_t stack_
                                 default: width = BIT_8; break;
                             }
                             if (_size - _counter < 1 + width) return RET_UNEXPECTED_END;
-                            ve_register &reg_out = ve.getRegister(_exec[++_counter]);
+                            ve_register &reg_out = getRegister(ve, _exec[++_counter]);
                             vbyte byte_in[width];
                             for(vbyte i = 0; i < width; i++) byte_in[i] = _exec[++_counter];
                             reg_out._data = vvalue(byte_in, width).get();
                         } break;
                         case 0b0100: { // [CPREG]
                             if (_size - _counter < 2) return RET_UNEXPECTED_END;
-                            ve_register &reg_in = ve.getRegister(_exec[++_counter]);
-                            ve_register &reg_out = ve.getRegister(_exec[++_counter]);
+                            ve_register &reg_in = getRegister(ve, _exec[++_counter]);
+                            ve_register &reg_out = getRegister(ve, _exec[++_counter]);
                             reg_out._data = reg_in._data.get(); // Don't want to change bitwidth of output register
                         } break;
                         default: return RET_UNKNOWN_COMMAND;
@@ -141,45 +157,52 @@ retcode ve_program::run(virtual_environment &ve, vbyte* stack_mem, size_t stack_
             switch(cmd & 0b00001111) {
                 case 0b0000: { // [ADD]
                     if (_size - _counter < 3) return RET_UNEXPECTED_END;
-                    ve_register &reg_in_1 = ve.getRegister(_exec[++_counter]);
-                    ve_register &reg_in_2 = ve.getRegister(_exec[++_counter]);
-                    ve_register &reg_out  = ve.getRegister(_exec[++_counter]);
+                    ve_register &reg_in_1 = getRegister(ve, _exec[++_counter]);
+                    ve_register &reg_in_2 = getRegister(ve, _exec[++_counter]);
+                    ve_register &reg_out  = getRegister(ve, _exec[++_counter]);
                     reg_out._data = reg_in_1._data.get() + reg_in_2._data.get();
                 } break;
                 case 0b0001: { // [SUB]
                     if (_size - _counter < 3) return RET_UNEXPECTED_END;
-                    ve_register &reg_in_1 = ve.getRegister(_exec[++_counter]);
-                    ve_register &reg_in_2 = ve.getRegister(_exec[++_counter]);
-                    ve_register &reg_out  = ve.getRegister(_exec[++_counter]);
+                    ve_register &reg_in_1 = getRegister(ve, _exec[++_counter]);
+                    ve_register &reg_in_2 = getRegister(ve, _exec[++_counter]);
+                    ve_register &reg_out  = getRegister(ve, _exec[++_counter]);
                     reg_out._data = reg_in_1._data.get() - reg_in_2._data.get();
                 } break;
                 case 0b0010: { // [MULT]
                     if (_size - _counter < 3) return RET_UNEXPECTED_END;
-                    ve_register &reg_in_1 = ve.getRegister(_exec[++_counter]);
-                    ve_register &reg_in_2 = ve.getRegister(_exec[++_counter]);
-                    ve_register &reg_out  = ve.getRegister(_exec[++_counter]);
+                    ve_register &reg_in_1 = getRegister(ve, _exec[++_counter]);
+                    ve_register &reg_in_2 = getRegister(ve, _exec[++_counter]);
+                    ve_register &reg_out  = getRegister(ve, _exec[++_counter]);
                     reg_out._data = reg_in_1._data.get() * reg_in_2._data.get();
                 } break;
                 case 0b0011: { // [DIV]
                     if (_size - _counter < 3) return RET_UNEXPECTED_END;
-                    ve_register &reg_in_1 = ve.getRegister(_exec[++_counter]);
-                    ve_register &reg_in_2 = ve.getRegister(_exec[++_counter]);
-                    ve_register &reg_out  = ve.getRegister(_exec[++_counter]);
+                    ve_register &reg_in_1 = getRegister(ve, _exec[++_counter]);
+                    ve_register &reg_in_2 = getRegister(ve, _exec[++_counter]);
+                    ve_register &reg_out  = getRegister(ve, _exec[++_counter]);
                     reg_out._data = reg_in_1._data.get() / reg_in_2._data.get();
                 } break;
-                case 0b0100: { // [INV]
+                case 0b0100: { // [MOD]
+                    if (_size - _counter < 3) return RET_UNEXPECTED_END;
+                    ve_register &reg_in_1 = getRegister(ve, _exec[++_counter]);
+                    ve_register &reg_in_2 = getRegister(ve, _exec[++_counter]);
+                    ve_register &reg_out  = getRegister(ve, _exec[++_counter]);
+                    reg_out._data = reg_in_1._data.get() % reg_in_2._data.get();
+                } break;
+                case 0b0101: { // [INV]
                     if (_size - _counter < 1) return RET_UNEXPECTED_END;
-                    ve_register &reg = ve.getRegister(_exec[++_counter]);
+                    ve_register &reg = getRegister(ve, _exec[++_counter]);
                     reg._data = reg._data.get() * -1;
                 } break;
                 case 0b0110: { // [INC]
                     if (_size - _counter < 1) return RET_UNEXPECTED_END;
-                    ve_register &reg = ve.getRegister(_exec[++_counter]);
+                    ve_register &reg = getRegister(ve, _exec[++_counter]);
                     reg._data = reg._data.get() + 1;
                 } break;
                 case 0b0111: { // [DEC]
                     if (_size - _counter < 1) return RET_UNEXPECTED_END;
-                    ve_register &reg = ve.getRegister(_exec[++_counter]);
+                    ve_register &reg = getRegister(ve, _exec[++_counter]);
                     reg._data = reg._data.get() - 1;
                 } break;
                 default: return RET_UNKNOWN_COMMAND;
@@ -212,6 +235,7 @@ retcode ve_program::run(virtual_environment &ve, vbyte* stack_mem, size_t stack_
                         continue;
                     } else {
                         uint64_t location = loc_val.getu();
+                        DEBUG_PRINT("Jump Address: " << location);
                         if(location >= _size) return RET_JUMP_OUT_OF_RANGE;
                         _counter = location;
                         continue;
@@ -227,8 +251,11 @@ retcode ve_program::run(virtual_environment &ve, vbyte* stack_mem, size_t stack_
                         case 0b11: width = BIT_64; break;
                     }
                     if (_size - _counter < 2 + width) return RET_UNEXPECTED_END;
-                    ve_register &reg1 = ve.getRegister(_exec[++_counter]);
-                    ve_register &reg2 = ve.getRegister(_exec[++_counter]);
+                    vbyte regID1 = _exec[++_counter];
+                    vbyte regID2 = _exec[++_counter];
+                    DEBUG_PRINT("Registers: " << (int)regID1 << " : " << (int)regID2);
+                    ve_register &reg1 = getRegister(ve, regID1);
+                    ve_register &reg2 = getRegister(ve, regID2);
                     vbyte loc_data[width];
                     for(vbyte i = 0; i < width; i++) loc_data[i] = _exec[++_counter];
                     vvalue loc_val(loc_data, width);
@@ -241,6 +268,7 @@ retcode ve_program::run(virtual_environment &ve, vbyte* stack_mem, size_t stack_
                             continue;
                         } else {
                             uint64_t location = loc_val.getu();
+                            DEBUG_PRINT("Jump Address: " << location);
                             if (location >= _size) return RET_JUMP_OUT_OF_RANGE;
                             _counter = location;
                             continue;
@@ -257,8 +285,11 @@ retcode ve_program::run(virtual_environment &ve, vbyte* stack_mem, size_t stack_
                         case 0b11: width = BIT_64; break;
                     }
                     if (_size - _counter < 2 + width) return RET_UNEXPECTED_END;
-                    ve_register &reg1 = ve.getRegister(_exec[++_counter]);
-                    ve_register &reg2 = ve.getRegister(_exec[++_counter]);
+                    vbyte regID1 = _exec[++_counter];
+                    vbyte regID2 = _exec[++_counter];
+                    DEBUG_PRINT("Registers: " << (int)regID1 << " : " << (int)regID2);
+                    ve_register &reg1 = getRegister(ve, regID1);
+                    ve_register &reg2 = getRegister(ve, regID2);
                     vbyte loc_data[width];
                     for(vbyte i = 0; i < width; i++) loc_data[i] = _exec[++_counter];
                     vvalue loc_val(loc_data, width);
@@ -271,6 +302,7 @@ retcode ve_program::run(virtual_environment &ve, vbyte* stack_mem, size_t stack_
                             continue;
                         } else {
                             uint64_t location = loc_val.getu();
+                            DEBUG_PRINT("Jump Address: " << location);
                             if (location >= _size) return RET_JUMP_OUT_OF_RANGE;
                             _counter = location;
                             continue;
@@ -287,8 +319,11 @@ retcode ve_program::run(virtual_environment &ve, vbyte* stack_mem, size_t stack_
                         case 0b11: width = BIT_64; break;
                     }
                     if (_size - _counter < 2 + width) return RET_UNEXPECTED_END;
-                    ve_register &reg1 = ve.getRegister(_exec[++_counter]);
-                    ve_register &reg2 = ve.getRegister(_exec[++_counter]);
+                    vbyte regID1 = _exec[++_counter];
+                    vbyte regID2 = _exec[++_counter];
+                    DEBUG_PRINT("Registers: " << (int)regID1 << " : " << (int)regID2);
+                    ve_register &reg1 = getRegister(ve, regID1);
+                    ve_register &reg2 = getRegister(ve, regID2);
                     vbyte loc_data[width];
                     for(vbyte i = 0; i < width; i++) loc_data[i] = _exec[++_counter];
                     vvalue loc_val(loc_data, width);
@@ -301,6 +336,7 @@ retcode ve_program::run(virtual_environment &ve, vbyte* stack_mem, size_t stack_
                             continue;
                         } else {
                             uint64_t location = loc_val.getu();
+                            DEBUG_PRINT("Jump Address: " << location);
                             if (location >= _size) return RET_JUMP_OUT_OF_RANGE;
                             _counter = location;
                             continue;

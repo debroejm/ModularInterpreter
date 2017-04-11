@@ -1,6 +1,18 @@
 #pragma once
 
+#include <bitset>
+#include <iostream>
 #include <stdint.h>
+
+//#define DEBUG_MODE
+
+#if defined(DEBUG_MODE)
+#define DEBUG_PRINT_CMD(CNT,BIN) std::cout << CNT << ":\t" << std::bitset<8>(BIN) << std::endl
+#define DEBUG_PRINT(STR) std::cout << STR << std::endl;
+#else
+#define DEBUG_PRINT_CMD(CNT,BIN)
+#define DEBUG_PRINT(STR)
+#endif
 
 typedef uint8_t     vbyte;
 typedef int64_t     retcode;

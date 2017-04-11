@@ -257,6 +257,7 @@ struct ve_program {
     vbyte* _exec = nullptr;
     size_t _size = 0;
     size_t _counter = 0;
+    ve_register _stack;
 
     ve_program() {
         _exec = nullptr;
@@ -282,11 +283,14 @@ struct ve_program {
     ve_program &operator=(const ve_program &rhs) {
         _size = rhs._size;
         _counter = rhs._counter;
+        _stack = rhs._stack;
         if(_exec != nullptr) delete [] _exec;
         _exec = new vbyte[_size];
         for(size_t i = 0; i < _size; i++) _exec[i] = rhs._exec[i];
         return *this;
     }
+
+    ve_register &getRegister(virtual_environment &ve, vbyte id);
 
     retcode run(virtual_environment &ve);
 
@@ -349,7 +353,8 @@ public:
 
     ve_memory &getMemory() { return _memory; }
 
-    size_t getStackSizeInBytes() { return _stack_size_in_bytes; }
+    size_t getStackSizeInBytes() const { return _stack_size_in_bytes; }
+    bit_width getMaxByteWidth() const { return _max_byte_width; }
 
     void setProgram(const ve_program &program) {
         _program = program;

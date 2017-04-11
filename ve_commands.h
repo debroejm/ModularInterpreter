@@ -122,12 +122,20 @@
 #define CMD_ALU_DIV             0b00010011
 
 
-// COMMAND : ALU Inversion [ALU_INV] : 00010100
+// COMMAND : ALU Modulus [ALU_MOD] : 00010100
+/* DESCRIPTION:
+ *   Performs the mathematical function of modulus on two registers, and puts the output in a third.
+ *   Registers to modulo are specified by the next two bytes, and register to output to is specified by the third.
+ */
+#define CMD_ALU_MOD             0b00010011
+
+
+// COMMAND : ALU Inversion [ALU_INV] : 00010101
 /* DESCRIPTION:
  *   Applies two's complement inversion on a register. Operation happens in place.
  *   Register to invert is specified by the next byte in sequence.
  */
-#define CMD_ALU_INV             0b00010100
+#define CMD_ALU_INV             0b00010101
 
 
 // COMMAND : ALU Increment [ALU_INC] : 00010110
