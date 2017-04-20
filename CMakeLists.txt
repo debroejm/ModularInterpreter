@@ -12,6 +12,7 @@ set(SOURCE_FILES
 set(HEADER_FILES
         compiler.h
         language.h
+        optimizer.h
         scope.h
         types.h
         ve_commands.h

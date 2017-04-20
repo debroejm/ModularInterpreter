@@ -8,8 +8,11 @@ retcode virtual_environment::run() {
 }
 
 ve_register &ve_program::getRegister(virtual_environment &ve, vbyte id) {
-    if(id == (vbyte)-1) return _stack;
-    else return ve.getRegister(id);
+    switch(id) {
+        case (vbyte)REG_STACK: return _stack;
+        case (vbyte)REG_COUNTER: return _counter;
+        default : return ve.getRegister(id);
+    }
 }
 
 retcode ve_program::run(virtual_environment &ve) {
@@ -23,7 +26,7 @@ retcode ve_program::run(virtual_environment &ve) {
 retcode ve_program::run(virtual_environment &ve, vbyte* stack_mem, size_t stack_size) {
     if(_exec == nullptr) return RET_UNEXPECTED_END;
 
-    _counter = 0;
+    _counter._data = 0;
     _stack = ve_register(ve.getMaxByteWidth());
 
     DEBUG_PRINT("Running");
@@ -35,7 +38,7 @@ retcode ve_program::run(virtual_environment &ve, vbyte* stack_mem, size_t stack_
 
         // [NOP]
         if(cmd == CMD_NOP) {
-            _counter++;
+            ++_counter;
             continue;
         }
 
@@ -205,7 +208,39 @@ retcode ve_program::run(virtual_environment &ve, vbyte* stack_mem, size_t stack_
                     ve_register &reg = getRegister(ve, _exec[++_counter]);
                     reg._data = reg._data.get() - 1;
                 } break;
-                default: return RET_UNKNOWN_COMMAND;
+                default: { // ALU constant command
+                    if(cmd & 0b00000100) { // [SUB_CONST]
+                        bit_width width;
+                        switch(cmd & 0b00000011) {
+                            case 0b00: width = BIT_8; break;
+                            case 0b01: width = BIT_16; break;
+                            case 0b10: width = BIT_32; break;
+                            case 0b11: width = BIT_64; break;
+                            default: width = BIT_8; break;
+                        }
+                        if (_size - _counter < 2 + width) return RET_UNEXPECTED_END;
+                        ve_register &reg_in = getRegister(ve, _exec[++_counter]);
+                        ve_register &reg_out = getRegister(ve, _exec[++_counter]);
+                        vbyte byte_in[width];
+                        for(vbyte i = 0; i < width; i++) byte_in[i] = _exec[++_counter];
+                        reg_out._data = reg_in._data.get() - vvalue(byte_in, width).get();
+                    } else { // [ADD_CONST]
+                        bit_width width;
+                        switch(cmd & 0b00000011) {
+                            case 0b00: width = BIT_8; break;
+                            case 0b01: width = BIT_16; break;
+                            case 0b10: width = BIT_32; break;
+                            case 0b11: width = BIT_64; break;
+                            default: width = BIT_8; break;
+                        }
+                        if (_size - _counter < 2 + width) return RET_UNEXPECTED_END;
+                        ve_register &reg_in = getRegister(ve, _exec[++_counter]);
+                        ve_register &reg_out = getRegister(ve, _exec[++_counter]);
+                        vbyte byte_in[width];
+                        for(vbyte i = 0; i < width; i++) byte_in[i] = _exec[++_counter];
+                        reg_out._data = reg_in._data.get() + vvalue(byte_in, width).get();
+                    }
+                }
             }
             _counter++;
             continue;

@@ -14,6 +14,9 @@
 #define DEBUG_PRINT(STR)
 #endif
 
+#define REG_STACK (vbyte)-1
+#define REG_COUNTER (vbyte)-2
+
 typedef uint8_t     vbyte;
 typedef int64_t     retcode;
 
@@ -102,6 +105,40 @@ struct vvalue {
                 break;
         }
         return *this;
+    }
+
+    vvalue &operator++() {
+        switch(_width) {
+            case BIT_8: ++_8.number;
+            case BIT_16: ++_16.number;
+            case BIT_32: ++_32.number;
+            case BIT_64: ++_64.number;
+            default: break;
+        }
+        return *this;
+    }
+
+    vvalue operator++(int) {
+        vvalue result(*this);
+        operator++();
+        return result;
+    }
+
+    vvalue &operator--() {
+        switch(_width) {
+            case BIT_8: --_8.number;
+            case BIT_16: --_16.number;
+            case BIT_32: --_32.number;
+            case BIT_64: --_64.number;
+            default: break;
+        }
+        return *this;
+    }
+
+    vvalue operator--(int) {
+        vvalue result(*this);
+        operator--();
+        return result;
     }
 
     int64_t get() const {

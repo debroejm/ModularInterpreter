@@ -127,7 +127,7 @@
  *   Performs the mathematical function of modulus on two registers, and puts the output in a third.
  *   Registers to modulo are specified by the next two bytes, and register to output to is specified by the third.
  */
-#define CMD_ALU_MOD             0b00010011
+#define CMD_ALU_MOD             0b00010100
 
 
 // COMMAND : ALU Inversion [ALU_INV] : 00010101
@@ -152,6 +152,34 @@
  *   Register to decrement is specified by the next byte in sequence.
  */
 #define CMD_ALU_DEC             0b00010111
+
+
+// COMMAND : ALU Constant Addition [ALU_ADD_CONST] : 000110aa
+/* DESCRIPTION:
+ *   Performs the mathematical function of addition on a register and a constant, and outputs to another register.
+ *   Register to add and register to output to are specified by the next two bytes.
+ *   Constant number to add is specified by the following 1-8 bytes in sequence after the first two.
+ *   [aa] represents the byte width of the constant:
+ *     00: 1 byte
+ *     01: 2 byte
+ *     10: 4 byte
+ *     11: 8 byte
+ */
+#define CMD_ALU_ADD_CONST       0b00011000
+
+
+// COMMAND : ALU Constant Subtraction [ALU_SUB_CONST] : 000111aa
+/* DESCRIPTION:
+ *   Performs the mathematical function of subtraction on a register and a constant, and outputs to another register.
+ *   Register to subtract from and register to output to are specified by the next two bytes.
+ *   Constant number to subtract is specified by the following 1-8 bytes in sequence after the first two.
+ *   [aa] represents the byte width of the constant:
+ *     00: 1 byte
+ *     01: 2 byte
+ *     10: 4 byte
+ *     11: 8 byte
+ */
+#define CMD_ALU_SUB_CONST       0b00011100
 
 
 // COMMAND : Jump Always [JMP] : 01000abb

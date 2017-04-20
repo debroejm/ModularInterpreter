@@ -249,6 +249,40 @@ struct ve_register {
     void clear() {
         _data = 0;
     }
+
+    ve_register &operator=(const vvalue &rhs) {
+        _data = rhs.get();
+        return *this;
+    }
+
+    ve_register &operator=(uint64_t rhs) {
+        _data = rhs;
+        return *this;
+    }
+
+    ve_register &operator++() {
+        ++_data;
+        return *this;
+    }
+
+    uint64_t operator++(int) {
+        uint64_t result = _data.getu();
+        ++_data;
+        return result;
+    }
+
+    ve_register &operator--() {
+        --_data;
+        return *this;
+    }
+
+    uint64_t operator--(int) {
+        uint64_t result = _data.getu();
+        --_data;
+        return result;
+    }
+
+    operator uint64_t() { return _data.getu(); }
 };
 
 struct virtual_environment;
@@ -256,20 +290,19 @@ struct virtual_environment;
 struct ve_program {
     vbyte* _exec = nullptr;
     size_t _size = 0;
-    size_t _counter = 0;
+    //size_t _counter = 0;
+    ve_register _counter;
     ve_register _stack;
 
     ve_program() {
         _exec = nullptr;
         _size = 0;
-        _counter = 0;
     }
 
     ve_program(size_t size, vbyte exec[]) {
         _size = size;
         _exec = new vbyte[_size];
         for(size_t i = 0; i < _size; i++) _exec[i] = exec[i];
-        _counter = 0;
     }
 
     ve_program(const ve_program &rhs) {
@@ -319,7 +352,7 @@ public:
 
     virtual_environment(bit_width max_byte_width, vbyte registry_count, size_t mem_size, memory_prefix mem_prefix, size_t stack_size, memory_prefix stack_prefix)
             : _memory(mem_size, mem_prefix), _register_count(registry_count), _max_byte_width(max_byte_width),
-              //_stack_ptr(_max_byte_width), _stack(stack_size, stack_prefix) {
+              //_stack_ptr(_max_byte_width), _used_stack(stack_size, stack_prefix) {
               _stack_size_in_bytes(stack_size*stack_prefix) {
         _registries = new ve_register[_register_count];
         for(vbyte i = 0; i < _register_count; i++) _registries[i] = ve_register(_max_byte_width);
