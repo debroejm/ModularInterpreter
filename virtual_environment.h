@@ -3,8 +3,36 @@
 #include "types.h"
 
 #include <iostream>
+#include <math.h>
 #include <set>
 #include <stdexcept>
+
+
+class EnvironmentException : public std::runtime_error {
+public:
+    enum Type {
+        SIZE_INVALID,
+        OUT_OF_RANGE
+    };
+
+    Type type() { return _type; }
+
+    static EnvironmentException MemorySizeInvalid(BitWidth width, size_t memSize, MemoryPrefix memPrefix) {
+        return EnvironmentException(SIZE_INVALID,
+                                    "A Bit Width of " + std::to_string(width) + " cannot map a Memory of the size " + std::to_string(memSize) + " " + std::to_string(memPrefix));
+    }
+    static EnvironmentException MemoryFreeOutOfRange(size_t begin, size_t end, size_t size_in_bytes) {
+        return EnvironmentException(OUT_OF_RANGE,
+                                    "Attempted to free Memory Chunk of range ["
+                                    + std::to_string(begin) + "-" + std::to_string(end)
+                                    + "] for Memory of size " + std::to_string(size_in_bytes));
+    }
+
+protected:
+    EnvironmentException(Type type, const std::string &msg) : _type(type), runtime_error(msg) {}
+    Type _type;
+};
+
 
 struct ve_memory {
 
@@ -53,7 +81,7 @@ public:
         _free_end = nullptr;
     }
 
-    ve_memory(size_t mem_size, memory_prefix prefix = MEM_BYTE) {
+    ve_memory(size_t mem_size, MemoryPrefix prefix = MEM_BYTE) {
         _size_in_bytes = mem_size * prefix;
         _data = new vbyte[_size_in_bytes];
         for(size_t i = 0; i < _size_in_bytes; i++) _data[i] = 0;
@@ -83,7 +111,7 @@ public:
                 // Save/output the begin/end indices
                 vbyte* resultByte = &_data[sect->begin];
                 if(begin != nullptr) *begin = sect->begin;
-                if(end != nullptr)   *end   = sect->begin+size;
+                if(end != nullptr)   *end   = sect->begin+size-1;
 
                 // Change free region begin index to match up to remaining size
                 size_t newBegin = sect->begin+size;
@@ -126,7 +154,7 @@ public:
         }
 
         // Range Check
-        if(begin < 0 || end >= _size_in_bytes) throw std::out_of_range("ve_memory::freeMemChunk");
+        if(begin < 0 || end >= _size_in_bytes) throw EnvironmentException::MemoryFreeOutOfRange(begin, end, _size_in_bytes);
 
         if(_free_start == nullptr) {
             // No existing free space, make a hole
@@ -239,18 +267,18 @@ public:
 };
 
 struct ve_register {
-    vvalue _data;
-    bit_width _width;
+    VariableValue _data;
+    BitWidth _width;
 
     ve_register() : _data((int64_t)0, BIT_8), _width(BIT_8) {}
 
-    ve_register(bit_width width) : _data((int64_t)0, width), _width(width) {}
+    ve_register(BitWidth width) : _data((int64_t)0, width), _width(width) {}
 
     void clear() {
         _data = 0;
     }
 
-    ve_register &operator=(const vvalue &rhs) {
+    ve_register &operator=(const VariableValue &rhs) {
         _data = rhs.get();
         return *this;
     }
@@ -282,6 +310,9 @@ struct ve_register {
         return result;
     }
 
+    void operator+=(int64_t rhs) { _data += rhs; }
+    void operator-=(int64_t rhs) { _data -= rhs; }
+
     operator uint64_t() { return _data.getu(); }
 };
 
@@ -293,14 +324,16 @@ struct ve_program {
     //size_t _counter = 0;
     ve_register _counter;
     ve_register _stack;
+    size_t _required_memory_size = 0;
 
     ve_program() {
         _exec = nullptr;
         _size = 0;
+        _required_memory_size = 0;
     }
 
-    ve_program(size_t size, vbyte exec[]) {
-        _size = size;
+    ve_program(size_t size, vbyte exec[], size_t required_memory_size)
+            : _size(size), _required_memory_size(required_memory_size) {
         _exec = new vbyte[_size];
         for(size_t i = 0; i < _size; i++) _exec[i] = exec[i];
     }
@@ -317,6 +350,7 @@ struct ve_program {
         _size = rhs._size;
         _counter = rhs._counter;
         _stack = rhs._stack;
+        _required_memory_size = rhs._required_memory_size;
         if(_exec != nullptr) delete [] _exec;
         _exec = new vbyte[_size];
         for(size_t i = 0; i < _size; i++) _exec[i] = rhs._exec[i];
@@ -329,7 +363,7 @@ struct ve_program {
 
 protected:
     friend class virtual_environment;
-    retcode run(virtual_environment &ve, vbyte* stack_mem, size_t stack_size);
+    retcode run(virtual_environment &ve, vbyte* stack_mem, vbyte* heap_mem, size_t stack_size);
 };
 
 class virtual_environment {
@@ -343,19 +377,21 @@ protected:
 
     ve_register* _registries = nullptr;
     vbyte _register_count;
-    bit_width _max_byte_width;
+    BitWidth _max_byte_width;
 
     ve_program _program;
 
 
 public:
 
-    virtual_environment(bit_width max_byte_width, vbyte registry_count, size_t mem_size, memory_prefix mem_prefix, size_t stack_size, memory_prefix stack_prefix)
+    virtual_environment(BitWidth max_byte_width, vbyte registry_count, size_t mem_size, MemoryPrefix mem_prefix, size_t stack_size, MemoryPrefix stack_prefix)
             : _memory(mem_size, mem_prefix), _register_count(registry_count), _max_byte_width(max_byte_width),
               //_stack_ptr(_max_byte_width), _used_stack(stack_size, stack_prefix) {
               _stack_size_in_bytes(stack_size*stack_prefix) {
         _registries = new ve_register[_register_count];
         for(vbyte i = 0; i < _register_count; i++) _registries[i] = ve_register(_max_byte_width);
+        if(pow((size_t)2, (size_t)max_byte_width*8) < (mem_size * mem_prefix))
+            throw EnvironmentException::MemorySizeInvalid(max_byte_width, mem_size, mem_prefix);
     }
 
     virtual_environment(const virtual_environment &rhs) {
@@ -387,7 +423,7 @@ public:
     ve_memory &getMemory() { return _memory; }
 
     size_t getStackSizeInBytes() const { return _stack_size_in_bytes; }
-    bit_width getMaxByteWidth() const { return _max_byte_width; }
+    BitWidth getMaxByteWidth() const { return _max_byte_width; }
 
     void setProgram(const ve_program &program) {
         _program = program;
